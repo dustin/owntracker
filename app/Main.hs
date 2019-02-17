@@ -17,21 +17,24 @@ import           Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 import           Database.InfluxDB     (Field (..), InfluxException (..), Key,
                                         Line (..), LineField, WriteParams, host,
                                         server, write, writeParams)
-import           Options.Applicative   (Parser, execParser, fullDesc, help,
-                                        helper, info, long, progDesc,
-                                        showDefault, strOption, value, (<**>))
+import           Options.Applicative   (Parser, auto, execParser, fullDesc,
+                                        help, helper, info, long, option,
+                                        progDesc, showDefault, strOption, value,
+                                        (<**>))
 import           Web.Scotty            (json, jsonData, liftAndCatchIO, post,
                                         raise, scotty)
 
 data Options = Options {
   optInfluxDBHost :: Text
   , optInfluxDB   :: String
+  , optListenPort :: Int
   }
 
 options :: Parser Options
 options = Options
   <$> strOption (long "dbhost" <> showDefault <> value "localhost" <> help "influxdb host")
   <*> strOption (long "dbname" <> showDefault <> value "owntracks" <> help "influxdb database")
+  <*> option auto (long "port" <> showDefault <> value 3000 <> help "listen port")
 
 commonFields :: Object -> Either String [(Key, LineField)]
 commonFields v = flip parseEither v $ \obj -> do
@@ -89,7 +92,7 @@ run :: Options -> IO ()
 run Options{..} = do
   let wp = writeParams (fromString optInfluxDB) & server.host .~ optInfluxDBHost
 
-  scotty 3000 $
+  scotty optListenPort $
     post "/" $ do
       t <- jsonData
       case j2ml (typ t) t of
