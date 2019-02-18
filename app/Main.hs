@@ -16,7 +16,7 @@ import           Data.Time             (UTCTime)
 import           Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 import           Database.InfluxDB     (Field (..), InfluxException (..), Key,
                                         Line (..), LineField, WriteParams, host,
-                                        server, write, writeParams)
+                                        server, writeBatch, writeParams)
 import           Options.Applicative   (Parser, auto, execParser, fullDesc,
                                         help, helper, info, long, option,
                                         progDesc, showDefault, strOption, value,
@@ -52,7 +52,8 @@ identify v = flip parseEither v $ \obj -> do
   let ts = posixSecondsToUTCTime . fromIntegral $ (tst::Int64)
   pure (tid, ts)
 
-j2ml :: Maybe Text -> Object -> Either String (Line UTCTime)
+j2ml :: Maybe Text -> Object -> Either String [Line UTCTime]
+
 j2ml (Just "location") v = do
   common <- commonFields v
   (tid, ts) <- identify v
@@ -62,13 +63,17 @@ j2ml (Just "location") v = do
     conn <- obj .: "conn"
     vel <- obj .: "vel"
     regs <- obj .:? "inregions" .!= []
-    let tags = Map.fromList ([("tid", fromString tid)] <> (take 1 . map (\x -> ("loc", fromString x))) regs)
-    pure $ Line "location" tags (Map.fromList (common <> [
-                                                  ("alt", FieldFloat alt),
-                                                  ("batt", FieldFloat batt),
-                                                  ("conn", FieldString conn),
-                                                  ("vel", FieldFloat vel)
-                                                  ])) (Just ts)
+    let tags = Map.fromList [("tid", fromString tid)]
+        mkl = \o -> Line "location" tags (Map.fromList (common <> o <> [
+                                                           ("alt", FieldFloat alt),
+                                                           ("batt", FieldFloat batt),
+                                                           ("conn", FieldString conn),
+                                                           ("vel", FieldFloat vel)
+                                                           ])) (Just ts)
+        lines = if null regs
+          then [mkl []]
+          else map (\r -> mkl [("loc", fromString r)]) regs
+    pure lines
 
 j2ml (Just "transition") v = do
   common <- commonFields v
@@ -79,11 +84,11 @@ j2ml (Just "transition") v = do
     desc <- obj .: "desc"
     t <- obj .: "t"
     let tags = Map.fromList [("tid", fromString tid), ("loc", fromString desc)]
-    pure $ Line "transition" tags (Map.fromList (common <> [
-                                                    ("wtst", FieldInt wtst),
-                                                    ("ev", FieldString ev),
-                                                    ("t", FieldString t)
-                                                    ])) (Just ts)
+    pure [Line "transition" tags (Map.fromList (common <> [
+                                                   ("wtst", FieldInt wtst),
+                                                   ("ev", FieldString ev),
+                                                   ("t", FieldString t)
+                                                   ])) (Just ts)]
 
 
 j2ml l v = Left $  mconcat $ ["not understood: ", show l, " ", show v]
@@ -97,7 +102,7 @@ run Options{..} = do
       t <- jsonData
       case j2ml (typ t) t of
         Left err -> raise . fromString $ err
-        Right l  -> liftAndCatchIO $ write wp l
+        Right l  -> liftAndCatchIO $ writeBatch wp l
       json Null
 
         where
