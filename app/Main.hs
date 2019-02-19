@@ -90,6 +90,20 @@ j2ml (Just "transition") v = do
                                                    ("t", FieldString t)
                                                    ])) (Just ts)]
 
+j2ml (Just "waypoint") v = do
+  flip parseEither v $ \obj -> do
+    tst <- obj .: "tst"
+    lon <- obj .: "lon"
+    lat <- obj .: "lat"
+    rad <- obj .: "rad"
+    desc <- obj .: "desc"
+    let ts = posixSecondsToUTCTime . fromIntegral $ (tst::Int64)
+    pure [Line "waypoint" (Map.singleton "loc" (fromString desc))
+           (Map.fromList [
+               ("lon", FieldFloat lon),
+               ("lat", FieldFloat lat),
+               ("rad", FieldFloat rad)]) (Just ts)]
+
 
 j2ml l v = Left $  mconcat $ ["not understood: ", show l, " ", show v]
 
