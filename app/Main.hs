@@ -64,15 +64,15 @@ j2ml (Just "location") v = do
     vel <- obj .: "vel"
     regs <- obj .:? "inregions" .!= []
     let tags = Map.fromList [("tid", fromString tid)]
-        mkl = \o -> Line "location" tags (Map.fromList (common <> o <> [
-                                                           ("alt", FieldFloat alt),
-                                                           ("batt", FieldFloat batt),
-                                                           ("conn", FieldString conn),
-                                                           ("vel", FieldFloat vel)
-                                                           ])) (Just ts)
+        mkl = \o -> Line "location" (Map.union tags o) (Map.fromList (common <> [
+                                                                         ("alt", FieldFloat alt),
+                                                                         ("batt", FieldFloat batt),
+                                                                         ("conn", FieldString conn),
+                                                                         ("vel", FieldFloat vel)
+                                                                         ])) (Just ts)
         lines = if null regs
-          then [mkl []]
-          else map (\r -> mkl [("loc", fromString r)]) regs
+          then [mkl mempty]
+          else map (\r -> mkl (Map.singleton "loc" $ fromString r)) regs
     pure lines
 
 j2ml (Just "transition") v = do
