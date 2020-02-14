@@ -60,7 +60,7 @@ j2ml (Just "location") v = do
   flip parseEither v $ \obj -> do
     alt <- obj .: "alt"
     batt <- obj .: "batt"
-    conn <- obj .: "conn"
+    conn <- obj .:? "conn" .!= "u"
     vel <- obj .: "vel"
     regs <- obj .:? "inregions" .!= []
     let tags = Map.fromList [("tid", fromString tid)]
